@@ -1,0 +1,17 @@
+{
+  "name": "smithy",
+  "owner": {
+    "name": "you"
+  },
+  "metadata": {
+    "description": "smithy: a software factory where the engineer grills, decides and signs; agents build and review; a live board pane shows it."
+  },
+  "plugins": [
+    {
+      "name": "smithy",
+      "source": "./",
+      "description": "Grill the feature, sign the spec, let agents build and review it.",
+      "category": "engineering"
+    }
+  ]
+}
