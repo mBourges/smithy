@@ -71,6 +71,7 @@ your repo: `/smithy:init`.
 | `/smithy:grill <feature>`             | New job and worktree. Grills you round by round, then compiles and audits the spec.            |
 | `/smithy:grill --cold <feature>`      | Same, but Claude gives options and trade-offs without recommending an answer.                  |
 | `/smithy:grill next`                  | Grills the first unchecked backlog item.                                                        |
+| `/smithy:add [--top] <feature>`       | Adds a line to `smithy/backlog.md`; `--top` puts it next in line for `/smithy:grill next`.     |
 | `/smithy:grill resume <id>`           | Continues a grill, or answers the questions a build stopped on.                                |
 | `/smithy [id]`                        | Opens the board pane, or one job in it.                                                         |
 | **Sign the spec** (in the board)      | Signs the spec after a clean audit, with a confirming press. Also `/smithy sign <id>`.         |
@@ -178,7 +179,7 @@ smithy/                           the plugin
     DECISIONS-FORMAT.md             decisions.md format
     SPEC-FORMAT.md                  spec.md format
     DOMAIN-DOCS.md                  glossary and ADR rules
-  skills/{build,approve,rework,status,init}/
+  skills/{build,approve,rework,status,init,add}/
   agents/                         scout, spec-auditor, builder, approver,
                                   reviewer-{conformance,code,security,ux,ui}
 

@@ -13,7 +13,7 @@ Run in the main checkout (`$(git rev-parse --path-format=absolute --git-common-d
      ```markdown
      # Backlog
 
-     `/smithy:grill next` grills the first unchecked item and checks it off with its job id.
+     `/smithy:add <feature>` adds an item. `/smithy:grill next` grills the first unchecked item and checks it off with its job id.
 
      - [ ] <feature, one line>
      ```

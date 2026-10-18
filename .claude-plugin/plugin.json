@@ -1,6 +1,6 @@
 {
   "name": "smithy",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "A software factory where the engineer does the engineering: every feature is grilled first, agents build only from a spec the engineer signed, and a live board pane shows it all inside Claude Code.",
   "author": {
     "name": "mBourges",
