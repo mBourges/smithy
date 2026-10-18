@@ -127,6 +127,8 @@ async function refresh($: EngineInterface, repo: string): Promise<void> {
   seen = now
 }
 
+const isPaneShown = async ($: EngineInterface): Promise<boolean> => (await $.ui.panes()).some(p => p.id === PANE && p.isPlaced)
+
 async function open($: EngineInterface, view?: View): Promise<void> {
   if (view) await update($, viewAtom, () => view)
   await $.ui.open({ id: PANE, title: 'smithy', focus: true })
@@ -200,33 +202,39 @@ export const register: Register = on => {
   }).catch(($, e, next) => (next.called ? next(e) : { deny: 'smithy: its guard failed, so the call was refused. Try again.' }))
 
   // ---------------------------------------------------------------- the band above the prompt
-  // Offers the board whenever the pane is closed in a repo smithy is set up in; loud while a job waits.
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.props.hasSurvey) return next(e)
     const board = await read($, boardAtom)
-    if (!board?.isSetUp) return next(e)
-    const panes = await $.ui.panes()
-    if (panes.some(p => p.id === PANE && p.isPlaced)) return next(e)
+    const waiting = (board?.jobs ?? []).filter(needsYou)
+    if (!waiting.length) return next(e)
+    if (await isPaneShown($)) return next(e)
     const { Box, Text, Button } = $.ui.resolve(e)
     const width = e.props.bodyColumns
-    const waiting = board.jobs.filter(needsYou)
     const summary = waiting.map(j => `${j.id} ${BAND_GLYPH[j.stage]}`).join(' · ')
     return (
       <Box flexDirection="row" gap={1}>
-        <Text color={waiting.length ? 'warning' : 'subtle'} bold={waiting.length > 0}>
-          ⚒ smithy
+        <Text color="warning" bold>
+          smithy
         </Text>
-        {waiting.length ? (
-          <Text wrap="truncate-end">{fit(`${waiting.length} waiting for you: ${summary}`, Math.max(10, width - 26))}</Text>
-        ) : null}
-        <Button
-          key="open-board"
-          label="Open board"
-          hotkey="o"
-          variant={waiting.length ? 'primary' : 'secondary'}
-          onPress={() => open($, { kind: 'board' })}
-        />
+        <Text wrap="truncate-end">{fit(`${waiting.length} waiting for you: ${summary}`, Math.max(10, width - 24))}</Text>
+        <Button key="open-board" label="Open board" hotkey="o" variant="primary" onPress={() => open($, { kind: 'board' })} />
+      </Box>
+    )
+  })
+
+  // ---------------------------------------------------------------- the footer's mode labels
+  // A quiet way back to the board: a dim button beside the engine's own labels while the pane is closed.
+
+  on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {
+    const board = await read($, boardAtom)
+    if (!board?.isSetUp || (await isPaneShown($))) return next(e)
+    const engine = await next(e)
+    const { Box, Button } = $.ui.resolve(e)
+    return (
+      <Box flexDirection="row" gap={1}>
+        {engine}
+        <Button key="open-board" label="⚒ board" plain dimColor onPress={() => open($, { kind: 'board' })} />
       </Box>
     )
   })

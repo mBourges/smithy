@@ -132,9 +132,10 @@ first `/smithy:grill` starts a job, and it fills in by itself as jobs appear.
 - **Sign / Reopen**: the buttons that make the spec yours (below).
 
 When the pane is closed you still see the factory: in a repo where smithy is
-set up, a **band above the prompt** carries an **Open board** button (`o`), the
-quickest way back to the pane, and turns loud with the list of jobs whenever
-one is waiting for you; the **status entry** under the prompt reads like
+set up, a dim **⚒ board** button sits among the mode labels at the right of the
+prompt footer, the quickest way back to the pane; a **band above the prompt**
+appears only while a job is waiting for you (with an **Open board** button);
+the **status entry** under the prompt reads like
 `⚒ smithy │ 2 need you: 004 ? decide · 002 ✍ sign │ 003 review r2 ✓✗…✓✓`, and a
 **toast** plus a native notification fire the moment a job starts waiting for
 you or merges, which matters when jobs run in several sessions.
@@ -170,7 +171,7 @@ smithy/                           the plugin
   hooks/hooks.json                { "modules": ["./register.tsx"] }
   hooks/register.tsx              the mod: pane, band, status, toasts, /smithy, guards
   hooks/jobs.ts                   reads jobs, seals, signs, judges tool calls
-  hooks/register.test.tsx         20 engine tests (claude plugin test .)
+  hooks/register.test.tsx         22 engine tests (claude plugin test .)
   types/index.d.ts                the mod's $.state contract
   skills/grill/                   the interview, plus its reference files:
     ENGINEERING-TREE.md             branches that must be visited

@@ -123,7 +123,8 @@ const start = async ($: Engine, on: On) => {
   on('ui.panes', () => ({ value: [...new Set(opened)].map(id => ({ id, title: id, isShown: true, isFocused: false, isPlaced: true })) }))
   on('command.register', ($, e) => ({ value: { command: e.name } }))
   on('session.start', ($, e) => ({ cwd: e.cwd }))
-  on('ui.render', () => h('Box', {}) as never)
+  // the engine's own drawing, beneath the mod: the footer's mode labels, else an empty Box
+  on('ui.render', ($, e) => (e.component === 'SessionMode' ? h('Text', {}, e.props.modes.join(' & ')) : h('Box', {})) as never)
   on('tool.call', () => ({ result: 'ran' }) as never)
   on('prompt.submit', ($, e) => ({ text: e.text, context: e.context }))
   const clock = mock.clock(on)
@@ -135,6 +136,8 @@ const BAND = {
   component: 'AbovePrompt',
   props: { hasSurvey: false, isWorking: false, maxRows: 6, bodyColumns: 100, scroll: { offset: 0, bodyRows: 6 }, view: {} },
 } as const
+
+const FOOTER = { component: 'SessionMode', props: { modes: ['focus'], view: {} } } as const
 
 const slash = ($: Engine, args = '') =>
   $.command.run({ command: 'smithy', args, origin: { kind: 'composer' }, presentation: { isFullscreen: true, columns: 120 } } as never)
@@ -293,25 +296,14 @@ describe('around the prompt', () => {
     await ui.press({ key: 'open-board' })
   })
 
-  test('with nothing waiting, the band still offers the board while the pane is closed', async ($, on) => {
+  test('with nothing waiting, the band stays away', async ($, on) => {
     fakeRepo(on, {
       [`${REPO}/smithy/backlog.md`]: '# Backlog\n\n- [ ] Passwordless login\n',
       [`${REPO}/smithy/config.json`]: '{ "mainBranch": "main" }\n',
     })
-    const { opened } = await start($, on)
-    for (const surface of ['terminal', 'desktop'] as const) {
-      const ui = await $.ui.mount({ plugin: 'smithy', surface, ...BAND })
-      expect(await ui.find({ key: 'open-board' })).toBeDefined()
-      expect(await ui.find({ text: /waiting for you/ })).toBeUndefined()
-      await ui.unmount()
-    }
+    await start($, on)
     const ui = await $.ui.mount({ plugin: 'smithy', surface: 'desktop', ...BAND })
-    await ui.press({ key: 'open-board' })
-    expect(opened).toContain('smithy')
-    await ui.unmount()
-    // the pane is open now, so the band steps aside
-    const again = await $.ui.mount({ plugin: 'smithy', surface: 'desktop', ...BAND })
-    expect(await again.find({ key: 'open-board' })).toBeUndefined()
+    expect(await ui.find({ key: 'open-board' })).toBeUndefined()
   })
 
   test('the band stays away from repos where smithy is not set up', async ($, on) => {
@@ -381,5 +373,34 @@ describe('before the first job', () => {
     const answer = await slash($, '999')
     expect(opened).toContain('smithy')
     expect(answer.text).toMatch(/No single job matches "999"/)
+  })
+})
+
+describe('the footer', () => {
+  test('offers the board beside the mode labels while the pane is closed', async ($, on) => {
+    fakeRepo(on, { [`${REPO}/smithy/config.json`]: '{ "mainBranch": "main" }\n' })
+    const { opened } = await start($, on)
+    for (const surface of ['terminal', 'desktop'] as const) {
+      const ui = await $.ui.mount({ plugin: 'smithy', surface, ...FOOTER })
+      expect((await ui.find({ key: 'open-board' }))?.text).toMatch(/⚒ board/)
+      expect(await ui.find({ text: /focus/ })).toBeDefined()
+      await ui.unmount()
+    }
+    const ui = await $.ui.mount({ plugin: 'smithy', surface: 'desktop', ...FOOTER })
+    await ui.press({ key: 'open-board' })
+    expect(opened).toContain('smithy')
+    await ui.unmount()
+    // the pane is open now: the button goes, the engine's labels stay
+    const again = await $.ui.mount({ plugin: 'smithy', surface: 'desktop', ...FOOTER })
+    expect(await again.find({ key: 'open-board' })).toBeUndefined()
+    expect(await again.find({ text: /focus/ })).toBeDefined()
+  })
+
+  test('stays plain in repos where smithy is not set up', async ($, on) => {
+    fakeRepo(on, { [`${REPO}/README.md`]: '# App\n' })
+    await start($, on)
+    const ui = await $.ui.mount({ plugin: 'smithy', surface: 'desktop', ...FOOTER })
+    expect(await ui.find({ key: 'open-board' })).toBeUndefined()
+    expect(await ui.find({ text: /focus/ })).toBeDefined()
   })
 })
