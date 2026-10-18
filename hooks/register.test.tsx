@@ -120,7 +120,7 @@ const start = async ($: Engine, on: On) => {
   on('ui.log', () => ({ value: undefined }))
   on('ui.notify', () => ({ value: { isSent: false as const, reason: 'no-surface' as const } }))
   on('ui.open', ($, e) => (opened.push(e.id), { value: { isPlaced: true as const } }))
-  on('ui.panes', () => ({ value: [] }))
+  on('ui.panes', () => ({ value: [...new Set(opened)].map(id => ({ id, title: id, isShown: true, isFocused: false, isPlaced: true })) }))
   on('command.register', ($, e) => ({ value: { command: e.name } }))
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('ui.render', () => h('Box', {}) as never)
@@ -130,6 +130,11 @@ const start = async ($: Engine, on: On) => {
   await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
   return { statuses, toasts, opened, clock }
 }
+
+const BAND = {
+  component: 'AbovePrompt',
+  props: { hasSurvey: false, isWorking: false, maxRows: 6, bodyColumns: 100, scroll: { offset: 0, bodyRows: 6 }, view: {} },
+} as const
 
 const slash = ($: Engine, args = '') =>
   $.command.run({ command: 'smithy', args, origin: { kind: 'composer' }, presentation: { isFullscreen: true, columns: 120 } } as never)
@@ -283,10 +288,37 @@ describe('around the prompt', () => {
   test('the band shows what is waiting and opens the board', async ($, on) => {
     fakeRepo(on, await seed())
     await start($, on)
-    const band = { component: 'AbovePrompt', props: { hasSurvey: false, isWorking: false, maxRows: 6, bodyColumns: 100, scroll: { offset: 0, bodyRows: 6 }, view: {} } } as const
-    const ui = await $.ui.mount({ plugin: 'smithy', surface: 'terminal', ...band })
+    const ui = await $.ui.mount({ plugin: 'smithy', surface: 'terminal', ...BAND })
     expect(await ui.find({ text: /2 waiting for you/ })).toBeDefined()
     await ui.press({ key: 'open-board' })
+  })
+
+  test('with nothing waiting, the band still offers the board while the pane is closed', async ($, on) => {
+    fakeRepo(on, {
+      [`${REPO}/smithy/backlog.md`]: '# Backlog\n\n- [ ] Passwordless login\n',
+      [`${REPO}/smithy/config.json`]: '{ "mainBranch": "main" }\n',
+    })
+    const { opened } = await start($, on)
+    for (const surface of ['terminal', 'desktop'] as const) {
+      const ui = await $.ui.mount({ plugin: 'smithy', surface, ...BAND })
+      expect(await ui.find({ key: 'open-board' })).toBeDefined()
+      expect(await ui.find({ text: /waiting for you/ })).toBeUndefined()
+      await ui.unmount()
+    }
+    const ui = await $.ui.mount({ plugin: 'smithy', surface: 'desktop', ...BAND })
+    await ui.press({ key: 'open-board' })
+    expect(opened).toContain('smithy')
+    await ui.unmount()
+    // the pane is open now, so the band steps aside
+    const again = await $.ui.mount({ plugin: 'smithy', surface: 'desktop', ...BAND })
+    expect(await again.find({ key: 'open-board' })).toBeUndefined()
+  })
+
+  test('the band stays away from repos where smithy is not set up', async ($, on) => {
+    fakeRepo(on, { [`${REPO}/README.md`]: '# App\n' })
+    await start($, on)
+    const ui = await $.ui.mount({ plugin: 'smithy', surface: 'desktop', ...BAND })
+    expect(await ui.find({ key: 'open-board' })).toBeUndefined()
   })
 
   test('a job that starts needing the engineer raises a toast on the next poll', async ($, on) => {

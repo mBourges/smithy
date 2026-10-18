@@ -200,24 +200,33 @@ export const register: Register = on => {
   }).catch(($, e, next) => (next.called ? next(e) : { deny: 'smithy: its guard failed, so the call was refused. Try again.' }))
 
   // ---------------------------------------------------------------- the band above the prompt
+  // Offers the board whenever the pane is closed in a repo smithy is set up in; loud while a job waits.
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.props.hasSurvey) return next(e)
     const board = await read($, boardAtom)
-    const waiting = (board?.jobs ?? []).filter(needsYou)
-    if (!waiting.length) return next(e)
+    if (!board?.isSetUp) return next(e)
     const panes = await $.ui.panes()
     if (panes.some(p => p.id === PANE && p.isPlaced)) return next(e)
     const { Box, Text, Button } = $.ui.resolve(e)
     const width = e.props.bodyColumns
+    const waiting = board.jobs.filter(needsYou)
     const summary = waiting.map(j => `${j.id} ${BAND_GLYPH[j.stage]}`).join(' · ')
     return (
       <Box flexDirection="row" gap={1}>
-        <Text color="warning" bold>
-          smithy
+        <Text color={waiting.length ? 'warning' : 'subtle'} bold={waiting.length > 0}>
+          ⚒ smithy
         </Text>
-        <Text wrap="truncate-end">{fit(`${waiting.length} waiting for you: ${summary}`, Math.max(10, width - 24))}</Text>
-        <Button key="open-board" label="Open board" hotkey="o" variant="primary" onPress={() => open($, { kind: 'board' })} />
+        {waiting.length ? (
+          <Text wrap="truncate-end">{fit(`${waiting.length} waiting for you: ${summary}`, Math.max(10, width - 26))}</Text>
+        ) : null}
+        <Button
+          key="open-board"
+          label="Open board"
+          hotkey="o"
+          variant={waiting.length ? 'primary' : 'secondary'}
+          onPress={() => open($, { kind: 'board' })}
+        />
       </Box>
     )
   })
