@@ -42,11 +42,20 @@ smithy is a Claude Code **mod**: a plugin whose hooks module draws the board
 inside Claude Code and guards the spec. Mods are early access, so use a recent
 Claude Code (built against 2.1.302).
 
-From a GitHub repository holding this folder:
+From GitHub, inside Claude Code:
 
 ```
-/plugin install smithy --marketplace <owner>/<repo>
+/plugin install smithy --marketplace mBourges/smithy
 ```
+
+or from your shell:
+
+```bash
+claude plugin install smithy --marketplace mBourges/smithy
+```
+
+In the desktop app: **+** → **Plugins** → **Add marketplace**, enter
+`mBourges/smithy`, then **Add plugin** on smithy.
 
 From a local clone, for one session: `claude --plugin-dir ./smithy`.
 
@@ -108,6 +117,10 @@ the grill are committed on the job branch.
 transcript in the fullscreen terminal (inline otherwise), and in the desktop
 and mobile apps. It refreshes every two seconds from the job folders.
 
+`/smithy` opens in any git repository. Before `/smithy:init` it explains how to
+set smithy up; after it, it shows the empty board and your backlog until the
+first `/smithy:grill` starts a job, and it fills in by itself as jobs appear.
+
 - **Board**: jobs that need you first, each with the one thing to do next;
   jobs in progress with a progress bar and review chips
   (`conf ✓ code ✗ sec … ux ✓ ui ✓`); merged jobs; the backlog. Digits `1`–`9`
@@ -156,7 +169,7 @@ smithy/                           the plugin
   hooks/hooks.json                { "modules": ["./register.tsx"] }
   hooks/register.tsx              the mod: pane, band, status, toasts, /smithy, guards
   hooks/jobs.ts                   reads jobs, seals, signs, judges tool calls
-  hooks/register.test.tsx         14 engine tests (claude plugin test .)
+  hooks/register.test.tsx         18 engine tests (claude plugin test .)
   types/index.d.ts                the mod's $.state contract
   skills/grill/                   the interview, plus its reference files:
     ENGINEERING-TREE.md             branches that must be visited

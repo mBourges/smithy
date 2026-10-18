@@ -53,6 +53,8 @@ export type Job = {
 export type Board = {
   repo: string
   name: string
+  /** True when <repo>/smithy/ exists, i.e. /smithy:init has run. */
+  isSetUp: boolean
   jobs: Job[]
   backlog: string[]
 }
@@ -67,7 +69,7 @@ declare module 'claude-code' {
     smithy: {
       /** The main checkout, or null outside a git repo. */
       repo: string | null
-      /** The latest snapshot of smithy/jobs, or null when the repo has none. */
+      /** The latest snapshot of the repo's smithy folder; null outside a git repo, or before the first read. */
       board: Board | null
       view: View
       /** The job whose Sign button was pressed once and awaits the confirming press. */

@@ -1,7 +1,8 @@
 {
   "name": "smithy",
   "owner": {
-    "name": "you"
+    "name": "mBourges",
+    "url": "https://github.com/mBourges"
   },
   "metadata": {
     "description": "smithy: a software factory where the engineer grills, decides and signs; agents build and review; a live board pane shows it."

@@ -114,11 +114,12 @@ const typed = (text: string) => ({ text, wait: false, origin: { kind: 'composer'
 const start = async ($: Engine, on: On) => {
   const statuses: (string | undefined)[] = []
   const toasts: string[] = []
+  const opened: string[] = []
   on('ui.status', ($, e) => (statuses.push(e.text), { value: undefined }))
   on('ui.toast', ($, e) => (toasts.push(e.text), { value: undefined }))
   on('ui.log', () => ({ value: undefined }))
   on('ui.notify', () => ({ value: { isSent: false as const, reason: 'no-surface' as const } }))
-  on('ui.open', () => ({ value: { isPlaced: true as const } }))
+  on('ui.open', ($, e) => (opened.push(e.id), { value: { isPlaced: true as const } }))
   on('ui.panes', () => ({ value: [] }))
   on('command.register', ($, e) => ({ value: { command: e.name } }))
   on('session.start', ($, e) => ({ cwd: e.cwd }))
@@ -127,8 +128,11 @@ const start = async ($: Engine, on: On) => {
   on('prompt.submit', ($, e) => ({ text: e.text, context: e.context }))
   const clock = mock.clock(on)
   await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
-  return { statuses, toasts, clock }
+  return { statuses, toasts, opened, clock }
 }
+
+const slash = ($: Engine, args = '') =>
+  $.command.run({ command: 'smithy', args, origin: { kind: 'composer' }, presentation: { isFullscreen: true, columns: 120 } } as never)
 
 // ------------------------------------------------------------------ tests
 
@@ -223,7 +227,7 @@ describe('signing', () => {
     await start($, on)
     const presentation = { isFullscreen: true, columns: 120 } as never
     const byPlugin = await $.command.run({ command: 'smithy', args: 'sign 002', origin: { kind: 'plugin', name: 'other' }, presentation } as never)
-    expect(byPlugin.text).toMatch(/only the engineer/)
+    expect(byPlugin.text).toMatch(/^Only the engineer/)
     expect(repo.files.has(`${J}/002-csv-export/SIGNED.json`)).toBe(false)
     const byPerson = await $.command.run({ command: 'smithy', args: 'sign 002', origin: { kind: 'composer' }, presentation } as never)
     expect(byPerson.text).toMatch(/signed 002-csv-export/)
@@ -293,5 +297,57 @@ describe('around the prompt', () => {
     repo.files.set(job, { text: JSON.stringify({ id: '003-rate-limit', stage: 'needs-human', round: 2 }), mtimeMs: repo.tick() })
     await clock.advance(2000)
     expect(toasts.at(-1)).toMatch(/003-rate-limit needs your review/)
+  })
+})
+
+describe('before the first job', () => {
+  test('in a repo without smithy, /smithy opens the pane and explains the setup', async ($, on) => {
+    fakeRepo(on, { [`${REPO}/README.md`]: '# App\n' })
+    const { statuses, opened } = await start($, on)
+    const answer = await slash($)
+    expect(opened).toContain('smithy')
+    expect(answer.text).toMatch(/not set up in this repo yet: run \/smithy:init/)
+    expect(answer.text?.startsWith('smithy:')).toBe(false)
+    expect(statuses.at(-1)).toBeUndefined()
+    for (const surface of ['terminal', 'desktop', 'mobile'] as const) {
+      const ui = await $.ui.mount({ plugin: 'smithy', surface, ...PANE(surface === 'mobile' ? 40 : 70) })
+      expect(await ui.find({ text: /isn’t set up in this repository yet/ })).toBeDefined()
+      expect(await ui.find({ text: /smithy:init/ })).toBeDefined()
+      await ui.unmount()
+    }
+  })
+
+  test('after /smithy:init, the pane shows the empty board and the backlog', async ($, on) => {
+    fakeRepo(on, {
+      [`${REPO}/smithy/backlog.md`]: '# Backlog\n\n- [ ] Passwordless login\n',
+      [`${REPO}/smithy/config.json`]: '{ "mainBranch": "main" }\n',
+    })
+    const { opened } = await start($, on)
+    const answer = await slash($)
+    expect(opened).toContain('smithy')
+    expect(answer.text).toBe('Opened the board.')
+    const ui = await $.ui.mount({ plugin: 'smithy', surface: 'terminal', ...PANE() })
+    expect(await ui.find({ text: /No jobs yet/ })).toBeDefined()
+    expect(await ui.find({ text: /Passwordless login/ })).toBeDefined()
+  })
+
+  test('the first job appears on the open board by itself', async ($, on) => {
+    const repo = fakeRepo(on, { [`${REPO}/smithy/config.json`]: '{ "mainBranch": "main" }\n' })
+    const { clock, opened } = await start($, on)
+    await slash($)
+    expect(opened).toContain('smithy')
+    const ui = await $.ui.mount({ plugin: 'smithy', surface: 'terminal', ...PANE() })
+    expect(await ui.find({ key: 'job:001-login' })).toBeUndefined()
+    repo.files.set(`${J}/001-login/job.json`, { text: JSON.stringify({ id: '001-login', feature: 'Login', stage: 'grill' }), mtimeMs: repo.tick() })
+    await clock.advance(2000)
+    expect(await ui.find({ key: 'job:001-login' })).toBeDefined()
+  })
+
+  test('an unknown job id still opens the board', async ($, on) => {
+    fakeRepo(on, await seed())
+    const { opened } = await start($, on)
+    const answer = await slash($, '999')
+    expect(opened).toContain('smithy')
+    expect(answer.text).toMatch(/No single job matches "999"/)
   })
 })

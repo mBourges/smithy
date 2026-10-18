@@ -78,7 +78,7 @@ function provenance(job: Job): string {
 }
 
 function statusLine(board: Board | null): string | undefined {
-  if (!board || board.jobs.length === 0) return undefined
+  if (!board?.isSetUp || board.jobs.length === 0) return undefined
   const waiting = board.jobs.filter(needsYou)
   const active = board.jobs.filter(j => !needsYou(j) && j.stage !== 'merged')
   const parts = ['⚒ smithy']
@@ -114,13 +114,13 @@ async function refresh($: EngineInterface, repo: string): Promise<void> {
   await update($, boardAtom, () => board)
   $.ui.status(statusLine(board))
 
-  const now = new Map((board?.jobs ?? []).map(j => [j.id, j.stage]))
+  const now = new Map(board.jobs.map(j => [j.id, j.stage]))
   if (seen !== null) {
-    for (const job of board?.jobs ?? []) {
+    for (const job of board.jobs) {
       if (seen.get(job.id) === job.stage) continue
       const say = MESSAGES[job.stage]
       if (!say) continue
-      $.ui.toast(`smithy: ${say(job)}`, { timeoutMs: 8000 })
+      $.ui.toast(say(job), { timeoutMs: 8000 })
       if (needsYou(job)) void $.ui.notify(say(job), { title: 'smithy' }).catch(() => undefined)
     }
   }
@@ -156,20 +156,22 @@ export const register: Register = on => {
   // /smithy, /smithy <job>, /smithy sign <job>, /smithy reopen <job>
   on('command.run', { command: 'smithy' }, async ($, e) => {
     const repo = await read($, repoAtom)
-    if (!repo) return { text: 'smithy: this session is not in a git repository.' }
+    if (!repo) return { text: 'This session is not in a git repository, so there is no smithy board here.' }
     const [verb = '', ref = ''] = e.args.trim().split(/\s+/)
     if (verb === 'sign' || verb === 'reopen') {
-      if (e.origin.kind !== 'composer') return { text: `smithy: only the engineer can ${verb} a spec, from the prompt or the board.` }
-      if (!ref) return { text: `smithy: which job? /smithy ${verb} <job-id>` }
+      if (e.origin.kind !== 'composer') return { text: `Only the engineer can ${verb} a spec, from the prompt or the board.` }
+      if (!ref) return { text: `Which job? /smithy ${verb} <job-id>` }
       const outcome = verb === 'sign' ? await sign($, repo, ref) : await reopen($, repo, ref)
       await refresh($, repo)
-      return { text: `smithy: ${outcome.message}` }
+      return { text: outcome.message }
     }
-    const board = await read($, boardAtom)
-    if (!board) return { text: 'smithy: no smithy/jobs folder here yet. Run /smithy:init, then /smithy:grill <feature>.' }
+    const board = (await read($, boardAtom)) ?? (await loadBoard($, repo))
+    await update($, boardAtom, () => board)
     const job = verb ? findJob(board, verb) : null
     await open($, job ? { kind: 'job', id: job.id } : { kind: 'board' })
-    return { text: job ? `Opened ${job.id} in the smithy board.` : 'Opened the smithy board.' }
+    if (verb && !job) return { text: `No single job matches "${verb}"; opened the board.` }
+    if (!board.isSetUp) return { text: 'Opened the board. smithy is not set up in this repo yet: run /smithy:init.' }
+    return { text: job ? `Opened ${job.id} in the board.` : 'Opened the board.' }
   })
 
   // Typed as a plain message: `smithy sign 003`, `smithy reopen 003`. Only the person's own Enter counts:
@@ -235,9 +237,25 @@ export const register: Register = on => {
     if (!board) {
       return (
         <Box flexDirection="column">
-          <Text bold>smithy</Text>
-          <Text color="subtle">No smithy/jobs folder in this repository yet.</Text>
-          <Text color="subtle">Run /smithy:init, then /smithy:grill &lt;feature&gt;.</Text>
+          <Text bold>⚒ smithy</Text>
+          <Text color="subtle">{repo ? 'Reading the repository…' : 'This session is not in a git repository.'}</Text>
+        </Box>
+      )
+    }
+
+    // ------------------------------------------------------------ before /smithy:init
+    if (!board.isSetUp) {
+      return (
+        <Box flexDirection="column" gap={1}>
+          <Text bold>⚒ smithy · {board.name}</Text>
+          <Text wrap="wrap">smithy isn’t set up in this repository yet.</Text>
+          <Box flexDirection="column">
+            <Text wrap="wrap">1. Run /smithy:init to create smithy/backlog.md and smithy/config.json.</Text>
+            <Text wrap="wrap">2. Start a job with /smithy:grill &lt;feature&gt;.</Text>
+          </Box>
+          <Text color="subtle" wrap="wrap">
+            The board fills in by itself once the first job appears.
+          </Text>
         </Box>
       )
     }
@@ -280,13 +298,13 @@ export const register: Register = on => {
         const outcome = await sign($, repo, job.id)
         await update($, armedAtom, () => null)
         await refresh($, repo)
-        $.ui.toast(`smithy: ${outcome.message}`, { timeoutMs: 6000 })
+        $.ui.toast(outcome.message, { timeoutMs: 6000 })
       }
       const reopenNow = async () => {
         if (!repo) return
         const outcome = await reopen($, repo, job.id)
         await refresh($, repo)
-        $.ui.toast(`smithy: ${outcome.message}`, { timeoutMs: 6000 })
+        $.ui.toast(outcome.message, { timeoutMs: 6000 })
       }
       return (
         <Box flexDirection="column" gap={1}>

@@ -178,10 +178,11 @@ async function loadJob($: $, folder: string): Promise<Job | null> {
 const lensOf = (file: string): string => file.replace(/^review-/, '').replace(/\.md$/, '')
 export const rank = (lens: string): number => (LENSES.includes(lens) ? LENSES.indexOf(lens) : LENSES.length)
 
-export async function loadBoard($: $, repo: string): Promise<Board | null> {
+export async function loadBoard($: $, repo: string): Promise<Board> {
+  const isSetUp = await $.fs.exists(join(repo, 'smithy')).catch(() => false)
   const dir = jobsDir(repo)
-  if (!(await $.fs.exists(dir).catch(() => false))) return null
-  const entries = await $.fs.list(dir).catch(() => [])
+  const hasJobs = await $.fs.exists(dir).catch(() => false)
+  const entries = hasJobs ? await $.fs.list(dir).catch(() => []) : []
   const jobs: Job[] = []
   for (const entry of entries.filter(e => e.kind === 'dir')) {
     const job = await loadJob($, join(dir, entry.name))
@@ -192,7 +193,7 @@ export async function loadBoard($: $, repo: string): Promise<Board | null> {
     .split('\n')
     .filter(line => line.startsWith('- [ ] '))
     .map(line => line.slice(6))
-  return { repo, name: basename(repo), jobs, backlog }
+  return { repo, name: basename(repo), isSetUp, jobs, backlog }
 }
 
 export function findJob(board: Board | null, ref: string): Job | null {
